@@ -36,6 +36,7 @@ void x86_mmu_init(void);
 #define X86_MMU_PG_PS		0x080           /* PS   Page size (0=4k,1=4M)   */
 #define X86_MMU_PG_PTE_PAT	0x080           /* PAT  PAT index               */
 #define X86_MMU_PG_G		0x100           /* G    Global                  */
+#define X86_MMU_PG_PCD		0x010		/* PCD				*/
 #define X86_MMU_CLEAR		0x0
 #define X86_DIRTY_ACCESS_MASK	0xf9f
 #define X86_PG_FRAME		(0xfffff000)
