@@ -68,14 +68,12 @@ DEVICE_INSTANCE(netif, pcnet0, &pcnet0_config);
 void target_init(void) {
 	//device_init_all();
 #ifndef ARCH_X86_64
-
-	device_init(device_get_by_name(ide, ide0));
-	ffs_mount(0, device_get_by_name(ide, ide0));
-
+	// device_init(device_get_by_name(ide, ide0));
+	// ffs_mount(0, device_get_by_name(ide, ide0));
 	tcpip_init(NULL, NULL);
 
-	device_init(device_get_by_name(netif, pcnet0));
-	class_netif_add(device_get_by_name(netif, pcnet0));
+	//device_init(device_get_by_name(netif, pcnet0));
+	//class_netif_add(device_get_by_name(netif, pcnet0));
 #endif
 }
 

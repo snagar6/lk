@@ -115,15 +115,53 @@ farjump:
 	movl $__bss_start, %edi	/* starting address of the bss */
 	movl $__bss_end, %ecx	/* find the length of the bss in bytes */
 	subl %edi, %ecx
-	shrl $2, %ecx			/* convert to 32 bit words, since the bss is aligned anyway */
+	shrl $2, %ecx		/* convert to 32 bit words, since the bss is aligned anyway */
 2:
 	movl $0, (%edi)
 	addl $4, %edi
 	loop 2b
-	
+
+	/* If Paging is enabled, jump to lk main */
+	mov %cr0, %eax
+	shrl $31, %eax
+	cmpl $1, %eax
+	je main_lk
+
+	/* Set PD in CR3 */
+	movl $pd, %eax
+	mov %eax, %cr3
+
+	movl $pd, %esi
+	movl $0x100, %ecx
+
+	/* We need 256 entries of 4MB each to cover 1GB */
+fill_pd:
+	xor %eax, %eax
+	mov $0x100, %eax
+	sub %ecx, %eax
+	shll $22,%eax
+	orl  $0x87, %eax
+	movl %eax, (%esi)
+	addl $4,%esi
+	loop fill_pd
+
+	/* Enabling Paging and from this point we are in */
+	xorl %eax, %eax
+	mov %cr4, %eax
+	orl $0x10, %eax
+	mov %eax, %cr4
+	xorl %eax, %eax
+	mov %cr0,  %eax
+	btsl $(31), %eax
+	mov %eax, %cr0
+
+	/* Flushing TLB's */
+        mov %cr3,%eax
+        mov %eax,%cr3
+
+main_lk:
 	/* call the main module */
 	call lk_main
-	
 0:							/* just sit around waiting for interrupts */
 	hlt						/* interrupts will unhalt the processor */
 	pause
@@ -306,6 +344,19 @@ _idt30:
 
 .global _idt_end
 _idt_end:
+
+/* Memory for the initial page table, we will use 2 pages for a
+   1 to 1 mapping that covers 1GB of physical memory */
+.align 4096
+.fill 4096
+
+.align 4096
+pd:
+.fill 4096
+
+.align 4096
+.fill 4096
+
 
 .bss
 .align 4096

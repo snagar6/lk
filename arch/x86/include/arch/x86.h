@@ -25,10 +25,20 @@
 
 #include <compiler.h>
 #include <sys/types.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
 __BEGIN_CDECLS
 
-void x86_mmu_init(void);
+#define PFEX_P			0x01
+#define PFEX_W			0x02
+#define PFEX_U			0x04
+#define PFEX_RSV		0x08
+#define PFEX_I			0x10
+#define X86_8BYTE_MASK		0xFFFFFFFF
+#define X86_CPUID_ADDR_WIDTH	0x80000008
+
+void arch_mmu_init(void);
 
 struct x86_iframe {
 	uint32_t pivot;                                     // stack switch pivot
@@ -76,6 +86,10 @@ typedef struct {
 #define X86_CR0_NW      0x20000000 /* not write-through */
 #define X86_CR0_CD      0x40000000 /* cache disable */
 #define X86_CR0_PG      0x80000000 /* enable paging */
+#define X86_CR4_PAE	0x00000020 /* PAE paging */
+#define x86_EFER_NXE	0x00000800 /* to enable execute disable bit */
+#define x86_MSR_EFER	0xc0000080 /* EFER Model Specific Register id */
+#define X86_CR4_PSE	0xffffffef /* Disabling PSE bit in the CR4 */
 
 static inline void set_in_cr0(uint32_t mask)
 {
@@ -257,6 +271,112 @@ static inline void outpdrep(uint16_t _port, uint32_t *_buffer,
 		: "d" (_port),
 		  "S" (_buffer),
 		  "c" (_writes));
+}
+
+static inline uint32_t read_msr (uint32_t msr_id)
+{
+	uint32_t msr_read_val = 0;
+
+        __asm__ __volatile__ (
+                "rdmsr \n\t"
+                : "=a" (msr_read_val)
+                : "c" (msr_id));
+
+        return msr_read_val;
+}
+
+static inline void write_msr (uint32_t msr_id, uint32_t msr_write_val)
+{
+        __asm__ __volatile__ (
+                "wrmsr \n\t"
+                : : "c" (msr_id), "a" (msr_write_val));
+}
+
+static inline uint32_t x86_get_cr3(void)
+{
+	uint32_t rv;
+
+	__asm__ __volatile__ (
+		"mov %%cr3, %0"
+		: "=r" (rv));
+	return rv;
+}
+
+static inline void x86_set_cr3(uint32_t in_val)
+{
+	__asm__ __volatile__ (
+		"mov %0,%%cr3 \n\t"
+		:
+		:"r" (in_val));
+}
+
+static inline uint32_t x86_get_cr0(void)
+{
+        uint32_t rv;
+
+	__asm__ __volatile__ (
+		"mov %%cr0, %0 \n\t"
+		: "=r" (rv));
+	return rv;
+}
+
+static inline uint32_t x86_get_cr4(void)
+{
+	uint32_t rv;
+
+	__asm__ __volatile__ (
+		"mov %%cr4, %0 \n\t"
+		: "=r" (rv));
+	return rv;
+}
+
+
+static inline void x86_set_cr0(uint32_t in_val)
+{
+	__asm__ __volatile__ (
+		"mov %0,%%cr0 \n\t"
+		:
+		:"r" (in_val));
+}
+
+static inline void x86_set_cr4(uint32_t in_val)
+{
+	__asm__ __volatile__ (
+		"mov %0,%%cr4 \n\t"
+		:
+		:"r" (in_val));
+}
+
+static inline uint32_t x86_get_address_width(void)
+{
+	uint32_t rv;
+
+	__asm__ __volatile__ (
+		"cpuid \n\t"
+		:"=a" (rv)
+		:"a" (X86_CPUID_ADDR_WIDTH));
+
+	/* Extracting bit 15:8 from eax register */
+	return ((rv >> 8) & 0x0ff);
+}
+
+static inline bool x86_is_paging_enabled()
+{
+	if(x86_get_cr0() & X86_CR0_PG)
+		return true;
+
+	return false;
+}
+
+static inline uint32_t x86_is_PAE_enabled()
+{
+	if(x86_is_paging_enabled() == false)
+		return false;
+
+	if(!(x86_get_cr4() & X86_CR4_PAE))
+		return false;
+
+	return true;
 }
 
 __END_CDECLS

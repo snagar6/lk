@@ -34,10 +34,6 @@ static tss_t system_tss;
 
 void arch_early_init(void)
 {
-	x86_mmu_init();
-
-	platform_init_mmu_mappings();
-
 	/* enable caches here for now */
 	clear_in_cr0(X86_CR0_NW | X86_CR0_CD);
 
@@ -64,4 +60,3 @@ void arch_chain_load(void *entry)
 {
     PANIC_UNIMPLEMENTED;
 }
-

@@ -31,15 +31,74 @@
 #include <platform/keyboard.h>
 #include <dev/pci.h>
 #include <dev/uart.h>
+#include <arch/x86.h>
+#include <arch/mmu.h>
+#include <malloc.h>
+#include <string.h>
+#include <assert.h>
 
 extern multiboot_info_t *_multiboot_info;
 extern uintptr_t _heap_end;
+extern uint32_t __code_start;
+extern uint32_t __code_end;
+extern uint32_t __rodata_start;
+extern uint32_t __rodata_end;
+extern uint32_t __data_start;
+extern uint32_t __data_end;
+extern uint32_t __bss_start;
+extern uint32_t __bss_end;
+
+/* Address width */
+uint32_t g_addr_width;
 
 void platform_init_mmu_mappings(void)
 {
-	/* do some memory map initialization */
-}
+	vaddr_t *new_pdt;
+	paddr_t phy_pdt;
+	struct map_range range;
+	uint32_t access = 0;
+	uint32_t cr4;
 
+	/* getting the address width from CPUID instr */
+	g_addr_width = x86_get_address_width();
+
+	/* creating a new pd table  */
+	new_pdt = memalign(PAGE_SIZE, PAGE_SIZE);
+	ASSERT(new_pdt);
+	memset(new_pdt, 0, PAGE_SIZE);
+	phy_pdt = (uint32_t)X86_VIRT_TO_PHYS(new_pdt);
+
+        /* kernel code section mapping */
+	access = X86_MMU_PG_P;
+	range.start_vaddr = range.start_paddr = (uint32_t) &__code_start;
+	range.size = ((uint32_t)&__code_end) - ((uint32_t)&__code_start);
+	x86_mmu_map_range(phy_pdt, &range, access);
+
+	/* kernel data section mapping */
+	access = X86_MMU_PG_RW | X86_MMU_PG_P;
+	range.start_vaddr = range.start_paddr = (uint32_t) &__data_start;
+	range.size = ((uint32_t)&__data_end) - ((uint32_t)&__data_start);
+	x86_mmu_map_range(phy_pdt, &range, access);
+
+	/* kernel rodata section mapping */
+	access = X86_MMU_PG_P;
+	range.start_vaddr = range.start_paddr = (uint32_t) &__rodata_start;
+	range.size = ((uint32_t)&__rodata_end) - ((uint32_t)&__rodata_start);
+	x86_mmu_map_range(phy_pdt, &range, access);
+
+	/* kernel bss section and kernel heap mappings */
+	access = X86_MMU_PG_RW | X86_MMU_PG_P;
+	range.start_vaddr = range.start_paddr = (uint32_t) &__bss_start;
+	range.size = ((uint32_t)_heap_end) - ((uint32_t)&__bss_start);
+	x86_mmu_map_range(phy_pdt, &range, access);
+
+	x86_set_cr3((uint32_t)phy_pdt);
+
+	/* Disable PSE bit in the CR4 */
+	cr4 = x86_get_cr4();
+	cr4 &= X86_CR4_PSE;
+	x86_set_cr4(cr4);
+}
 
 void platform_init_multiboot_info(void)
 {
@@ -96,8 +155,9 @@ void platform_init(void)
 	uart_init();
 
 	platform_init_keyboard();
-#ifndef ARCH_X86_64
+#ifndef ARCH_X86
 	pci_init();
 #endif
+	arch_mmu_init();
+	platform_init_mmu_mappings();
 }
-
